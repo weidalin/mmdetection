@@ -232,10 +232,8 @@ class AnchorHead(nn.Module):
         if unmap_outputs:
             num_total_anchors = flat_anchors.size(0)
             labels = unmap(
-                labels,
-                num_total_anchors,
-                inside_flags,
-                fill=self.background_label)  # fill bg label
+                labels, num_total_anchors, inside_flags,
+                fill=self.num_classes)  # fill bg label
             label_weights = unmap(label_weights, num_total_anchors,
                                   inside_flags)
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)

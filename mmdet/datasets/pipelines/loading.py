@@ -186,17 +186,17 @@ class LoadAnnotations(object):
 
     def _load_bboxes(self, results):
         ann_info = results['ann_info']
-        results['gt_bboxes'] = ann_info['bboxes'].copy()
+        results['gt_bboxes'] = ann_info['bboxes']
 
         gt_bboxes_ignore = ann_info.get('bboxes_ignore', None)
         if gt_bboxes_ignore is not None:
-            results['gt_bboxes_ignore'] = gt_bboxes_ignore.copy()
+            results['gt_bboxes_ignore'] = gt_bboxes_ignore
             results['bbox_fields'].append('gt_bboxes_ignore')
         results['bbox_fields'].append('gt_bboxes')
         return results
 
     def _load_labels(self, results):
-        results['gt_labels'] = results['ann_info']['labels'].copy()
+        results['gt_labels'] = results['ann_info']['labels']
         return results
 
     def _poly2mask(self, mask_ann, img_h, img_w):
