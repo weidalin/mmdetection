@@ -18,43 +18,45 @@ from .custom import CustomDataset
 @DATASETS.register_module()
 class CocoDataset(CustomDataset):
 
-    CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-               'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
-               'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog',
-               'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
-               'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-               'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat',
-               'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-               'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-               'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-               'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-               'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
-               'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
-               'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock',
-               'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
+    # CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+    #            'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
+    #            'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog',
+    #            'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
+    #            'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+    #            'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat',
+    #            'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    #            'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+    #            'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
+    #            'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+    #            'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
+    #            'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
+    #            'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock',
+    #            'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
+    CLASSES = ('fbox')
 
     def load_annotations(self, ann_file):
         self.coco = COCO(ann_file)
-        self.cat_ids = self.coco.get_cat_ids(cat_names=self.CLASSES)
+        self.cat_ids = self.coco.getCatIds(catNms=self.CLASSES)
+        #print("********************self.cat_ids:",self.cat_ids)
         self.cat2label = {cat_id: i for i, cat_id in enumerate(self.cat_ids)}
-        self.img_ids = self.coco.get_img_ids()
+        self.img_ids = self.coco.getImgIds()
         data_infos = []
         for i in self.img_ids:
-            info = self.coco.load_imgs([i])[0]
+            info = self.coco.loadImgs([i])[0]
             info['filename'] = info['file_name']
             data_infos.append(info)
         return data_infos
 
     def get_ann_info(self, idx):
         img_id = self.data_infos[idx]['id']
-        ann_ids = self.coco.get_ann_ids(img_ids=[img_id])
-        ann_info = self.coco.load_anns(ann_ids)
+        ann_ids = self.coco.getAnnIds(imgIds=[img_id])
+        ann_info = self.coco.loadAnns(ann_ids)
         return self._parse_ann_info(self.data_infos[idx], ann_info)
 
     def get_cat_ids(self, idx):
         img_id = self.data_infos[idx]['id']
-        ann_ids = self.coco.get_ann_ids(img_ids=[img_id])
-        ann_info = self.coco.load_anns(ann_ids)
+        ann_ids = self.coco.getAnnIds(imgIds=[img_id])
+        ann_info = self.coco.loadAnns(ann_ids)
         return [ann['category_id'] for ann in ann_info]
 
     def _filter_imgs(self, min_size=32):
@@ -83,12 +85,12 @@ class CocoDataset(CustomDataset):
 
         ids = set()
         for i, class_id in enumerate(self.cat_ids):
-            ids |= set(self.coco.cat_img_map[class_id])
+            ids |= set(self.coco.catToImgs[class_id])
         self.img_ids = list(ids)
 
         data_infos = []
         for i in self.img_ids:
-            info = self.coco.load_imgs([i])[0]
+            info = self.coco.loadImgs([i])[0]
             info['filename'] = info['file_name']
             data_infos.append(info)
         return data_infos
@@ -174,9 +176,11 @@ class CocoDataset(CustomDataset):
 
     def _det2json(self, results):
         json_results = []
+
         for idx in range(len(self)):
             img_id = self.img_ids[idx]
             result = results[idx]
+            # print("***************result:",result)
             for label in range(len(result)):
                 bboxes = result[label]
                 for i in range(bboxes.shape[0]):
@@ -184,7 +188,8 @@ class CocoDataset(CustomDataset):
                     data['image_id'] = img_id
                     data['bbox'] = self.xyxy2xywh(bboxes[i])
                     data['score'] = float(bboxes[i][4])
-                    data['category_id'] = self.cat_ids[label]
+                    # data['category_id'] = self.cat_ids[label]
+                    data['category_id'] = 1
                     json_results.append(data)
         return json_results
 
@@ -268,8 +273,8 @@ class CocoDataset(CustomDataset):
     def fast_eval_recall(self, results, proposal_nums, iou_thrs, logger=None):
         gt_bboxes = []
         for i in range(len(self.img_ids)):
-            ann_ids = self.coco.get_ann_ids(img_ids=self.img_ids[i])
-            ann_info = self.coco.load_anns(ann_ids)
+            ann_ids = self.coco.getAnnIds(imgIds=self.img_ids[i])
+            ann_info = self.coco.loadAnns(ann_ids)
             if len(ann_info) == 0:
                 gt_bboxes.append(np.zeros((0, 4)))
                 continue
@@ -372,7 +377,7 @@ class CocoDataset(CustomDataset):
                 log_msg = ''.join(log_msg)
                 print_log(log_msg, logger=logger)
                 continue
-
+            # print("***************result_files***************:",result_files)
             if metric not in result_files:
                 raise KeyError(f'{metric} is not in results')
             try:
