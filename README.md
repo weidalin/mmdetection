@@ -13,6 +13,7 @@ MMDetection is an open source object detection toolbox based on PyTorch. It is
 a part of the OpenMMLab project developed by [Multimedia Laboratory, CUHK](http://mmlab.ie.cuhk.edu.hk/).
 
 ![demo image](demo/coco_test_12510.jpg)
+![demo image](demo/coco_test_12510.jpg)
 
 ### Major features
 

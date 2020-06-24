@@ -12,34 +12,44 @@ from mmdet.apis import multi_gpu_test, single_gpu_test
 from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
-
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description='MMDet test (and eval) a model')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
+    #输出.pkl格式
     parser.add_argument('--out', help='output result file in pickle format')
+    #加bn
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
         help='Whether to fuse conv and bn, this will slightly increase'
         'the inference speed')
+    #输出josn格式
+    #--format-only --options "jsonfile_prefix=work_dirs/cascade_rcnn_val_results"
     parser.add_argument(
         '--format-only',
         action='store_true',
         help='Format the output results without perform evaluation. It is'
         'useful when you want to format the result to a specific format and '
         'submit it to the test server')
+    #验证集
     parser.add_argument(
         '--eval',
         type=str,
         nargs='+',
         help='evaluation metrics, which depends on the dataset, e.g., "bbox",'
         ' "segm", "proposal" for COCO, and "mAP", "recall" for PASCAL VOC')
+    #把验证集里的图片infer展示出来
     parser.add_argument('--show', action='store_true', help='show results')
+    #把验证及里的图片的infer保存
     parser.add_argument(
         '--show-dir', help='directory where painted images will be saved')
+    #只展示高于此score-thr
     parser.add_argument(
         '--show-score-thr',
         type=float,
@@ -99,12 +109,15 @@ def main():
     # build the dataloader
     # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
+    #把data_loader看看，这里只是加载了数据集
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=1,
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=distributed,
         shuffle=False)
+    logger.info(data_loader)
+
 
     # build the model and load checkpoint
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
@@ -120,11 +133,14 @@ def main():
         model.CLASSES = checkpoint['meta']['CLASSES']
     else:
         model.CLASSES = dataset.CLASSES
-
+    #如果不是分布式，那么建立模型，输出
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
+        #应该是在这里改输出的格式
+        #发现错了，应该是改data_loader里的东西，
         outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
                                   args.show_score_thr)
+    #分布式，则
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
@@ -135,12 +151,19 @@ def main():
 
     rank, _ = get_dist_info()
     if rank == 0:
+        #out  是写 .pkl的
         if args.out:
             print(f'\nwriting results to {args.out}')
             mmcv.dump(outputs, args.out)
         kwargs = {} if args.options is None else args.options
+        #将infer 格式化成 .json
+        #--format-only --options "jsonfile_prefix=work_dirs/cascade_rcnn_val_results"
         if args.format_only:
+            #这里的output只有bbox，score
+            #还需要添加 height, width, id 到output，也就算更改single_gpu_test
+            # outputs == single_gpu_test(model, data_loader, args.show, args.show_dir, args.show_score_thr)
             dataset.format_results(outputs, **kwargs)
+
         if args.eval:
             dataset.evaluate(outputs, args.eval, **kwargs)
 

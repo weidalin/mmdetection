@@ -276,12 +276,12 @@ class HybridTaskCascadeRoIHead(CascadeRoIHead):
                                 gt_labels[j],
                                 feats=[lvl_feat[j][None] for lvl_feat in x])
                             sampling_results.append(sampling_result)
-                mask_results = self._mask_forward_train(
-                    i, x, sampling_results, gt_masks, rcnn_train_cfg,
-                    semantic_feat)
-                for name, value in mask_results['loss_mask'].items():
-                    losses[f's{i}.{name}'] = (
-                        value * lw if 'loss' in name else value)
+                # mask_results = self._mask_forward_train(
+                #     i, x, sampling_results, gt_masks, rcnn_train_cfg,
+                #     semantic_feat)
+                # for name, value in mask_results['loss_mask'].items():
+                #     losses[f's{i}.{name}'] = (
+                #         value * lw if 'loss' in name else value)
 
             # refine bboxes (same as Cascade R-CNN)
             if i < self.num_stages - 1 and not self.interleaved:

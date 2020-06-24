@@ -10,42 +10,57 @@ import torch.distributed as dist
 from mmcv.runner import get_dist_info
 
 from mmdet.core import encode_mask_results, tensor2imgs
+import logging
+logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
+#outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
+                                  # args.show_score_thr)
 def single_gpu_test(model,
                     data_loader,
                     show=False,
                     out_dir=None,
                     show_score_thr=0.3):
+    #输出分值大于show_score_thr的bbox
+    logger.info(data_loader)
     model.eval()
     results = []
+    #加载数据集
     dataset = data_loader.dataset
+    #写入进度
     prog_bar = mmcv.ProgressBar(len(dataset))
-    #i是第i张图片，从0开始
-    #data 是第i个张图片的data
+    #遍历验证集
     for i, data in enumerate(data_loader):
         with torch.no_grad():
-            #现在这个result之保存了一个叔组
-            # single_data = open("/home/weida/PycharmProjects/mmdetection/work_dirs/dataloader_single_data.txt","w")
-            # single_data.write(str(data))
             result = model(return_loss=False, rescale=True, **data)
-            result.append(data["img_metas"][0].data[0])
-            '''
-            data["img_metas"][0].data[0]: [{'filename': 'data/crowdhuman/Images/273271,12c170004bd53807.jpg',
-                                            'ori_filename': '273271,12c170004bd53807.jpg', 'ori_shape': (1000, 1500, 3),
-                                            'img_shape': (600, 900, 3), 'pad_shape': (608, 928, 3),
-                                            'scale_factor': array([0.6, 0.6, 0.6, 0.6], dtype=float32), 'flip': False,
-                                            'flip_direction': 'horizontal',
-                                            'img_norm_cfg': {'mean': array([123.675, 116.28, 103.53], dtype=float32),
-                                                             'std': array([58.395, 57.12, 57.375], dtype=float32),
-                                                             'to_rgb': True}}]
-
-            print('data["img_metas"][0].data[0]:', data["img_metas"][0].data[0])
-            '''
-            # print("mmdet/apist/test.py.....result:", result)
-
-        if show or out_dir:
+            # add .....先看看 imgs, img_metas, data里面是什么
             img_tensor = data['img'][0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            imgs_txt = open("/home/weida/PycharmProjects/mmdetection/work_dirs/imgs_txt.txt", "a")
+            img_metas_txt = open("/home/weida/PycharmProjects/mmdetection/work_dirs/imgs_metas_txt.txt", "a")
+            data_txt = open("/home/weida/PycharmProjects/mmdetection/work_dirs/data_txt.txt", "a")
+            imgs_txt.write(str(imgs))
+            img_metas_txt.write(str(img_metas))
+            data_txt.write(str(data))
+            # end .......
+            for img_meta in img_metas:
+                h, w, _ = img_meta['img_shape']
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                id = img_meta['ori_filename'][:-4]
+                # print("apis/test.py: 88l ....ori_filename:", id)
+                results.append(h)
+                results.append(w)
+                results.append(w)
+                results.append(ori_h)
+                results.append(ori_w)
+                results.append(id)
+        #把infer的图片可视化
+        if show or out_dir:
+            #得到图片
+            img_tensor = data['img'][0]
+            #得到图片信息
             img_metas = data['img_metas'][0].data[0]
             imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
             assert len(imgs) == len(img_metas)
@@ -74,7 +89,11 @@ def single_gpu_test(model,
             bbox_results, mask_results = result
             encoded_mask_results = encode_mask_results(mask_results)
             result = bbox_results, encoded_mask_results
+
+        #将bbox加入results中
         results.append(result)
+        #将height, width 加入result中
+
 
         batch_size = data['img'][0].size(0)
         for _ in range(batch_size):

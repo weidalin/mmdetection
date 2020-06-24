@@ -93,6 +93,8 @@ def build_dataloader(dataset,
     Returns:
         DataLoader: A PyTorch dataloader.
     """
+    # print("mmdet/datasets/builder.py 96l : get_dist_info")
+    #获取分布式信息，但我们不是分布式
     rank, world_size = get_dist_info()
     if dist:
         # DistributedGroupSampler will definitely shuffle the data to satisfy
@@ -105,6 +107,7 @@ def build_dataloader(dataset,
                 dataset, world_size, rank, shuffle=False)
         batch_size = samples_per_gpu
         num_workers = workers_per_gpu
+    #如果不是分布式
     else:
         sampler = GroupSampler(dataset, samples_per_gpu) if shuffle else None
         batch_size = num_gpus * samples_per_gpu

@@ -44,21 +44,26 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=6,
     workers_per_gpu=3,
+    # samples_per_gpu=2,
+    # workers_per_gpu=2,
     train=dict(
-        _delete_=True,
-        type='RepeatDataset',
-        times=5,
-        dataset=dict(
-            type=dataset_type,
-            ann_file=data_root + 'train.json',
-            img_prefix=data_root + 'Images/',
-            pipeline=train_pipeline)),
-    val=dict(pipeline=test_pipeline),
-    test=dict(pipeline=test_pipeline))
+        type=dataset_type,
+        ann_file=data_root + 'train.json',
+        img_prefix=data_root + 'Images/',
+        pipeline=train_pipeline),
+    val=dict(
+        type=dataset_type,
+        ann_file=data_root + 'val.json',
+        img_prefix=data_root + 'Images/',
+        pipeline=test_pipeline),
+    test=dict(
+        type=dataset_type,
+        ann_file=data_root + 'val.json',
+        img_prefix=data_root + 'Images/',
+        pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
 optimizer_config = dict(_delete_=True)
-work_dir = 'work_dirs/train_on_faster_rcnn_crowdhuman'
-total_epochs = 2
+work_dir = 'work_dirs/ssd300_crowdhuman_24epoch'

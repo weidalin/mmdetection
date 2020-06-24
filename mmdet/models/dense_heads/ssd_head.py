@@ -8,7 +8,7 @@ from mmdet.core import (build_anchor_generator, build_assigner,
 from ..builder import HEADS
 from ..losses import smooth_l1_loss
 from .anchor_head import AnchorHead
-
+from ..builder import build_loss
 
 # TODO: add loss evaluator for SSD
 @HEADS.register_module()
@@ -34,6 +34,17 @@ class SSDHead(AnchorHead):
                  train_cfg=None,
                  test_cfg=None):
         super(AnchorHead, self).__init__()
+
+        #add 2020-06-20
+        loss_cls_config = dict(
+            type='FocalLoss',
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=1.0)
+        self.loss_cls = build_loss(loss_cls_config)
+        #end 2020-06-20
+
         self.num_classes = num_classes
         self.in_channels = in_channels
         self.cls_out_channels = num_classes + 1  # add background class
@@ -109,8 +120,10 @@ class SSDHead(AnchorHead):
         topk_loss_cls_neg, _ = loss_cls_all[neg_inds].topk(num_neg_samples)
         loss_cls_pos = loss_cls_all[pos_inds].sum()
         loss_cls_neg = topk_loss_cls_neg.sum()
-        loss_cls = (loss_cls_pos + loss_cls_neg) / num_total_samples
-
+        # loss_cls = (loss_cls_pos + loss_cls_neg) / num_total_samples
+        # add 2020-06-20
+        loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
+        # end 2020-06-20
         if self.reg_decoded_bbox:
             bbox_pred = self.bbox_coder.decode(anchor, bbox_pred)
 

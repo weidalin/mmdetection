@@ -13,7 +13,9 @@ from terminaltables import AsciiTable
 from mmdet.core import eval_recalls
 from .builder import DATASETS
 from .custom import CustomDataset
-
+import logging
+logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 @DATASETS.register_module()
 class CocoDataset(CustomDataset):
@@ -116,6 +118,13 @@ class CocoDataset(CustomDataset):
             if ann.get('ignore', False):
                 continue
             x1, y1, w, h = ann['bbox']
+            x2 = x1 + w
+            y2 = y1 + h
+            if ((x1 < 0 or x1 >= img_info['width'] or y1 < 0
+                 or y1 >= img_info['height'])
+                    and (x2 < 0 or x2 >= img_info['width'] or y2 < 0
+                         or y2 >= img_info['height'])):
+                continue
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
             if ann['category_id'] not in self.cat_ids:
@@ -173,7 +182,7 @@ class CocoDataset(CustomDataset):
                 data['category_id'] = 1
                 json_results.append(data)
         return json_results
-
+    #tensor-->json
     def _det2json(self, results):
         json_results = []
 
@@ -181,7 +190,8 @@ class CocoDataset(CustomDataset):
             img_id = self.img_ids[idx]
             result = results[idx]
             # print("***************result:",result)
-            for label in range(len(result)):
+            #因为为在result里添加了图片信息的一个List,而result之前的都根原来的一样。
+            for label in range(len(result)-1):
                 bboxes = result[label]
                 for i in range(bboxes.shape[0]):
                     data = dict()
@@ -192,6 +202,61 @@ class CocoDataset(CustomDataset):
                     data['category_id'] = 1
                     json_results.append(data)
         return json_results
+    #add _det2_json_crowdhuman_format
+    #result 只有bbox+score
+    def _det2_json_crowdhuman_format(self, results):
+        json_results = []
+        for idx in range(len(self)):
+            img_id = self.img_ids[idx]
+            result = results[idx]
+            '''
+            result结构：
+            [
+                array(),
+                array(),
+                [{'filename': 'data/crowdhuman/Images/273271,12c170004bd53807.jpg',
+                                            'ori_filename': '273271,12c170004bd53807.jpg', 'ori_shape': (1000, 1500, 3),
+                                            'img_shape': (600, 900, 3), 'pad_shape': (608, 928, 3),
+                                            'scale_factor': array([0.6, 0.6, 0.6, 0.6], dtype=float32), 'flip': False,
+                                            'flip_direction': 'horizontal',
+                                            'img_norm_cfg': {'mean': array([123.675, 116.28, 103.53], dtype=float32),
+                                                             'std': array([58.395, 57.12, 57.375], dtype=float32),
+                                                             'to_rgb': True}}]
+            ]
+            '''
+            # print("cocopy 211l ***************result:",result)
+            #取文件名作为id
+            # result_txt = open("/home/weida/PycharmProjects/mmdetection/work_dirs/result_txt.txt", "w")
+            # result_txt.write(str(result))
+            # results_txt = open("/home/weida/PycharmProjects/mmdetection/work_dirs/results.txt", "w")
+            # results_txt.write(str(results))
+            ID = result[-1][0]["ori_filename"][:-4]
+            # print("\nID:", ID)
+            #取图的高宽
+            height, width, _ = result[-1][0]['img_shape']
+            ori_h, ori_w = result[-1][0]['ori_shape'][:-1]
+
+            data = dict()
+            data["height"] = height
+            data['ID'] = ID
+            data["width"] = width
+            data["dtboxes"] = []
+
+            for label in range(len(result)-1):
+                bboxes = result[label]
+                for i in range(bboxes.shape[0]):
+                    box = dict()
+                    box["score"] = float(bboxes[i][4])
+                    box["tag"] = 1
+                    box["box"] = self.xyxy2xywh(bboxes[i])
+                    # data['category_id'] = self.cat_ids[label]
+                    #如果box的分数大于0.3才appen这个Box
+                    if box["score"] > 0.7:
+                        data["dtboxes"].append(box)
+            json_results.append(data)
+        return json_results
+    #end add _det2_json_crowdhuman_format
+
 
     def _segm2json(self, results):
         bbox_json_results = []
@@ -230,6 +295,8 @@ class CocoDataset(CustomDataset):
                     segm_json_results.append(data)
         return bbox_json_results, segm_json_results
 
+    # --format-only --options "jsonfile_prefix=work_dirs/cascade_rcnn_val_results"
+    #把tensor专程json
     def results2json(self, results, outfile_prefix):
         """Dump the detection results to a json file.
 
@@ -250,9 +317,14 @@ class CocoDataset(CustomDataset):
                 values are corresponding filenames.
         """
         result_files = dict()
+        # print("mmdet/datasets/coco.py..260l........results：",results)
         if isinstance(results[0], list):
-            json_results = self._det2json(results)
-            result_files['bbox'] = f'{outfile_prefix}.bbox.json'
+            # json_results = self._det2json(results)
+            # 1.输出coco格式json
+            json_results = self._det2json(results)                      #平时使用这个
+            # 2.输出crowdhuman格式json
+            # json_results = self._det2_json_crowdhuman_format(results)
+            result_files['bbox'] = f'{outfile_prefix}.bbox.json'            #需要输出crowdhuman时才用这个
             result_files['proposal'] = f'{outfile_prefix}.bbox.json'
             mmcv.dump(json_results, result_files['bbox'])
         elif isinstance(results[0], tuple):
@@ -293,7 +365,8 @@ class CocoDataset(CustomDataset):
             gt_bboxes, results, proposal_nums, iou_thrs, logger=logger)
         ar = recalls.mean(axis=1)
         return ar
-
+    #--format-only --options "jsonfile_prefix=work_dirs/cascade_rcnn_val_results"
+    #默认是coco格式，改成一下crowdhuman的格式吧
     def format_results(self, results, jsonfile_prefix=None, **kwargs):
         """Format the results to json (standard format for COCO evaluation).
 
@@ -308,17 +381,24 @@ class CocoDataset(CustomDataset):
                 the json filepaths, tmp_dir is the temporal directory created
                 for saving json files when jsonfile_prefix is not specified.
         """
+        #结果必须三一个list
         assert isinstance(results, list), 'results must be a list'
+        #长度要相等
         assert len(results) == len(self), (
             'The length of results is not equal to the dataset len: {} != {}'.
             format(len(results), len(self)))
-
+        #文件名前缀没有指定
         if jsonfile_prefix is None:
             tmp_dir = tempfile.TemporaryDirectory()
             jsonfile_prefix = osp.join(tmp_dir.name, 'results')
+        #文件名前缀指定 jsonfile_prefix=work_dirs/cascade_rcnn_val_results
         else:
             tmp_dir = None
+        #把infer结果写成json格式
         result_files = self.results2json(results, jsonfile_prefix)
+        #把infer结果写成json_crowdhuman_format格式
+
+        # result_files = self.results2json_crowdhuman_format(results, jsonfile_prefix)
         return result_files, tmp_dir
 
     def evaluate(self,
